@@ -4,7 +4,9 @@ const bodyParser = require("body-parser");
 const app = express();
 app.use(bodyParser.json());
 
-// Пример: одно тестовое устройство — лампа
+/**
+ * --- Устройства ---
+ */
 const devices = [
   {
     id: "lamp1",
@@ -37,46 +39,72 @@ const devices = [
   }
 ];
 
-// Разлогин
-app.post("/user/unlink", (req, res) => {
-  res.send({});
-});
-
-// DISCOVERY — список устройств
+/**
+ * --- DISCOVERY (список устройств) ---
+ */
 app.post("/v1.0/user/devices", (req, res) => {
   res.json({
-    request_id: "discovery-12345",
-    payload: { user_id: "user1", devices }
+    request_id: req.body.request_id || "1",
+    payload: {
+      user_id: "test_user",
+      devices: devices
+    }
   });
 });
 
-// QUERY — запрос состояния
+/**
+ * --- QUERY (состояния устройств) ---
+ */
 app.post("/v1.0/user/devices/query", (req, res) => {
-  const result = req.body.devices.map(d => ({
-    id: d.id,
+  const result = devices.map(device => ({
+    id: device.id,
     capabilities: [
-      { type: "devices.capabilities.on_off", state: { instance: "on", value: true } },
-      { type: "devices.capabilities.range", state: { instance: "brightness", value: 80 } },
-      { type: "devices.capabilities.color_setting", state: { instance: "rgb", value: 0xFFAA00 } }
-    ]
+      {
+        type: "devices.capabilities.on_off",
+        state: { instance: "on", value: true }
+      },
+      {
+        type: "devices.capabilities.range",
+        state: { instance: "brightness", value: 50 }
+      },
+      {
+        type: "devices.capabilities.color_setting",
+        state: { instance: "rgb", value: 16711680 } // красный (RGB)
+      }
+    ],
+    properties: []
   }));
 
-  res.json({ request_id: "query-12345", payload: { devices: result } });
+  res.json({
+    request_id: req.body.request_id || "1",
+    payload: { devices: result }
+  });
 });
 
-// ACTION — управление устройством
+/**
+ * --- ACTION (выполнение команд) ---
+ */
 app.post("/v1.0/user/devices/action", (req, res) => {
-  const result = req.body.payload.devices.map(d => ({
-    id: d.id,
-    capabilities: d.capabilities.map(c => ({
-      type: c.type,
-      state: { instance: c.state.instance, action_result: { status: "DONE" } }
+  const devicesReq = req.body.payload.devices;
+
+  const result = devicesReq.map(device => ({
+    id: device.id,
+    capabilities: device.capabilities.map(cap => ({
+      type: cap.type,
+      state: {
+        instance: cap.state.instance,
+        action_result: { status: "DONE" }
+      }
     }))
   }));
 
-  res.json({ request_id: "action-12345", payload: { devices: result } });
+  res.json({
+    request_id: req.body.request_id || "1",
+    payload: { devices: result }
+  });
 });
 
-// Запуск сервера
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`LEDMC Alice Connector listening on ${port}`));
+app.listen(port, () => {
+  console.log(`LED-MC connector running on port ${port}`);
+});
