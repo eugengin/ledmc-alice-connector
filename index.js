@@ -2,104 +2,81 @@ const express = require("express");
 const bodyParser = require("body-parser");
 
 const app = express();
-app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-/**
- * --- OAuth ---
- */
-
-// Шаг 1. Авторизация
-app.get("/oauth/authorize", (req, res) => {
-  const { client_id, redirect_uri, state } = req.query;
-
-  // Простейшая заглушка: сразу редиректим обратно в Алису
-  const code = "test_auth_code";
-  res.redirect(`${redirect_uri}?code=${code}&state=${state}`);
-});
-
-// Шаг 2. Получение токена
-app.post("/oauth/token", (req, res) => {
-  res.json({
-    access_token: "test_access_token",
-    token_type: "Bearer",
-    expires_in: 3600,
-    refresh_token: "test_refresh_token"
-  });
-});
-
-/**
- * --- Устройства ---
- */
-
-// Список устройств
-app.get("/devices", (req, res) => {
-  res.json({
-    request_id: "1",
-    payload: {
-      user_id: "test_user",
-      devices: [
-        {
-          id: "lamp1",
-          name: "Лампа LED-MC",
-          type: "devices.types.light",
-          capabilities: [
-            { type: "devices.capabilities.on_off", retrievable: true },
-            {
-              type: "devices.capabilities.range",
-              retrievable: true,
-              parameters: {
-                instance: "brightness",
-                unit: "unit.percent",
-                range: { min: 0, max: 100, precision: 1 }
-              }
-            },
-            {
-              type: "devices.capabilities.color_setting",
-              retrievable: true,
-              parameters: { color_model: "rgb" }
-            },
-            {
-              type: "devices.capabilities.mode",
-              retrievable: true,
-              parameters: {
-                instance: "scene",
-                modes: [
-                  { value: "breathing" },
-                  { value: "flash" },
-                  { value: "text_sync" }
-                ]
-              }
-            }
-          ]
+// Пример: одно тестовое устройство — лампа
+const devices = [
+  {
+    id: "lamp1",
+    name: "Тестовая лампа",
+    type: "devices.types.light",
+    capabilities: [
+      {
+        type: "devices.capabilities.on_off",
+        retrievable: true,
+        parameters: {}
+      },
+      {
+        type: "devices.capabilities.range",
+        retrievable: true,
+        parameters: {
+          instance: "brightness",
+          unit: "unit.percent",
+          range: { min: 0, max: 100, precision: 1 }
         }
-      ]
-    }
-  });
-});
-
-// Выполнение команд
-app.post("/devices/action", (req, res) => {
-  const devices = req.body.payload.devices.map((device) => {
-    return {
-      id: device.id,
-      capabilities: device.capabilities.map((cap) => ({
-        type: cap.type,
-        state: {
-          instance: cap.state.instance,
-          action_result: { status: "DONE" }
+      },
+      {
+        type: "devices.capabilities.color_setting",
+        retrievable: true,
+        parameters: {
+          color_model: "rgb"
         }
-      }))
-    };
-  });
+      }
+    ],
+    properties: []
+  }
+];
 
+// Разлогин
+app.post("/user/unlink", (req, res) => {
+  res.send({});
+});
+
+// DISCOVERY — список устройств
+app.post("/v1.0/user/devices", (req, res) => {
   res.json({
-    request_id: req.body.request_id || "1",
-    payload: { devices }
+    request_id: "discovery-12345",
+    payload: { user_id: "user1", devices }
   });
 });
 
+// QUERY — запрос состояния
+app.post("/v1.0/user/devices/query", (req, res) => {
+  const result = req.body.devices.map(d => ({
+    id: d.id,
+    capabilities: [
+      { type: "devices.capabilities.on_off", state: { instance: "on", value: true } },
+      { type: "devices.capabilities.range", state: { instance: "brightness", value: 80 } },
+      { type: "devices.capabilities.color_setting", state: { instance: "rgb", value: 0xFFAA00 } }
+    ]
+  }));
+
+  res.json({ request_id: "query-12345", payload: { devices: result } });
+});
+
+// ACTION — управление устройством
+app.post("/v1.0/user/devices/action", (req, res) => {
+  const result = req.body.payload.devices.map(d => ({
+    id: d.id,
+    capabilities: d.capabilities.map(c => ({
+      type: c.type,
+      state: { instance: c.state.instance, action_result: { status: "DONE" } }
+    }))
+  }));
+
+  res.json({ request_id: "action-12345", payload: { devices: result } });
+});
+
+// Запуск сервера
 const port = process.env.PORT || 3000;
-app.listen(port, () =>
-  console.log(`LED-MC connector running on port ${port}`)
-);
+app.listen(port, () => console.log(`LEDMC Alice Connector listening on ${port}`));
