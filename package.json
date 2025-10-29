@@ -1,7 +1,7 @@
 {
   "name": "ledmc-alice-connector",
   "version": "1.0.0",
-  "description": "Расширенный коннектор LED-MC для Яндекс Алисы и связи с нейросетью через Vercel",
+  "description": "Рассширенный коннектор LED-MC для Яндекс Алисы с новым взаимодействием устройств.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,7 +9,8 @@
   "dependencies": {
     "express": "^4.18.2",
     "body-parser": "^1.20.2",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "node-fetch": "^3.3.2"
   },
   "engines": {
     "node": ">=18.x"
