@@ -1,73 +1,51 @@
 // api/chat.js
-// Серверless-эндпойнт Vercel для прокси к OpenAI Chat Completions.
-// Работает на Node 18+. Поддерживает CORS и preflight.
-
-const ALLOWED_ORIGIN = process.env.CORS_ORIGIN || "*";
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
-
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Max-Age": "86400",
-  };
-}
+// Серверless-функция для общения с OpenAI API
+import fetch from "node-fetch";
+import cors from "cors";
 
 export default async function handler(req, res) {
-  // Preflight
+  // CORS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
   if (req.method === "OPTIONS") {
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
-    res.setHeader("Vary", "Origin");
-    res.writeHead(204, corsHeaders());
-    return res.end();
+    res.status(200).end();
+    return;
   }
 
   if (req.method !== "POST") {
-    res.writeHead(405, { ...corsHeaders(), "Content-Type": "application/json" });
-    return res.end(JSON.stringify({ error: "Method Not Allowed" }));
+    res.status(405).json({ error: "Method Not Allowed" });
+    return;
   }
 
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      res.writeHead(500, { ...corsHeaders(), "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ error: "OPENAI_API_KEY not set" }));
-    }
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const messages = body.messages || [];
+    const temperature = body.temperature ?? 0.5;
 
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const { messages = [], system = "You are a helpful assistant for LED-MC.", temperature = 0.5 } = body;
-
-    // Проксируем в OpenAI Chat Completions
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: MODEL,
+        model: process.env.MODEL || "gpt-4o-mini",
         messages,
-        temperature,
-      }),
+        temperature
+      })
     });
 
-    const data = await r.json();
-    if (!r.ok) {
-      res.writeHead(r.status, { ...corsHeaders(), "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ error: data?.error || data }));
+    const data = await openaiResponse.json();
+    if (!openaiResponse.ok) {
+      res.status(openaiResponse.status).json(data);
+      return;
     }
 
-    res.writeHead(200, { ...corsHeaders(), "Content-Type": "application/json" });
-    res.end(JSON.stringify({
-      ok: true,
-      model: data.model,
-      reply: data.choices?.[0]?.message?.content || "",
-      raw: data,
-    }));
-  } catch (err) {
-    res.writeHead(500, { ...corsHeaders(), "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: String(err) }));
+    const text = data.choices?.[0]?.message?.content ?? "Нет ответа.";
+    res.status(200).json({ message: text });
+  } catch (error) {
+    res.status(500).json({ error: error.message || String(error) });
   }
 }
