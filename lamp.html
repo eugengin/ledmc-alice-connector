@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>LED-MC Voice Disk</title>
+<style>
+  body { background:#111; color:#eee; text-align:center; font-family:Arial; }
+  canvas { margin-top:40px; }
+  #log { width:80%; height:150px; margin:20px auto; background:#000; color:#0f0; padding:10px; overflow-y:auto; text-align:left; }
+  button { margin:10px; padding:10px 20px; font-size:16px; border:none; border-radius:6px; cursor:pointer; }
+  #startBtn { background:#ffa500; }
+  #stopBtn { background:#f00; color:#fff; }
+</style>
+</head>
+<body>
+<h2>🟡 LED-MC Disk — голосовой коннектор</h2>
+<canvas id="disc" width="340" height="340"></canvas><br>
+<button id="startBtn">🎙 Говорить</button>
+<button id="stopBtn">🛑 Стоп</button>
+<div id="log"></div>
+
+<script>
+const log = msg => {
+  const l = document.getElementById("log");
+  l.innerHTML += msg + "<br>";
+  l.scrollTop = l.scrollHeight;
+};
+const canvas = document.getElementById('disc');
+const ctx = canvas.getContext('2d');
+ctx.beginPath();
+ctx.arc(170,170,160,0,2*Math.PI);
+ctx.fillStyle="#222";
+ctx.fill();
+ctx.strokeStyle="#FFD700";
+ctx.lineWidth=6;
+ctx.stroke();
+
+let recognition;
+if ('webkitSpeechRecognition' in window) {
+  recognition = new webkitSpeechRecognition();
+  recognition.lang = "ru-RU";
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.onresult = async event => {
+    const text = event.results[event.results.length-1][0].transcript.trim();
+    log("🎤 " + text);
+    try {
+      const res = await fetch("https://ledmc-alice-connector.vercel.app/api/chat", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({
+          deviceId:"demo-disc-34cm",
+          text,              // ← исправлено на text
+          user:"ledmc-site"
+        })
+      });
+      const data = await res.json();
+      log("🤖 Ответ: " + JSON.stringify(data));
+    } catch(e){ log("❌ Ошибка: " + e.message); }
+  };
+}
+document.getElementById('startBtn').onclick=()=>{ recognition?.start(); log("Голос: старт"); };
+document.getElementById('stopBtn').onclick=()=>{ recognition?.stop(); log("Голос: стоп"); };
+</script>
+</body>
+</html>
