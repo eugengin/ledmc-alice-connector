@@ -1,157 +1,48 @@
-// api/chat.js — LED-MC Voice Bridge (ESM)
+// /api/chat.js  — минимальный рабочий ответ с полем `reply`
+// ESM (package.json: "type": "module")
 
-import fetch from "node-fetch";
-
-/** CORS helper */
-function setCors(res) {
+export default async function handler(req, res) {
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
+  if (req.method === "OPTIONS") return res.status(200).end();
 
-export default async function handler(req, res) {
-  setCors(res);
-
-  // Preflight
-  if (req.method === "OPTIONS") {
-    res.status(204).end();
-    return;
-  }
-
-  // Health check in browser
+  // Healthcheck
   if (req.method === "GET") {
-    res
-      .status(200)
-      .json({ ok: true, endpoint: "/api/chat", ts: new Date().toISOString() });
-    return;
+    return res.status(200).json({ ok: true, endpoint: "/api/chat", ts: new Date().toISOString() });
   }
 
   if (req.method !== "POST") {
-    res.status(405).json({ error: "Method Not Allowed" });
-    return;
+    return res.status(405).json({ ok: false, error: "Method Not Allowed" });
   }
 
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const text = String(body.text || "").trim();
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const text = (body.message || "").trim();
 
     if (!text) {
-      res.status(400).json({ ok: false, error: "Empty text" });
-      return;
+      return res.status(400).json({ ok: false, error: "Empty text" });
     }
 
-    // --- простая локальная разметка команд для лампы (не мешает диалогу) ---
-    const lamp_action = detectLampAction(text);
+    // <<< ВРЕМЕННЫЙ ЭХО-ОТВЕТ (для проверки цепочки) >>>
+    // Здесь позже подключим OpenAI. Сейчас важно вернуть поле `reply`.
+    let reply = `Принял: "${text}". Я на связи.`;
 
-    // --- вызов OpenAI (чат-ответ для пользователя) ---
-    const apiKey = process.env.OPENAI_API_KEY;
-    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    // Примитивные правила для наглядности
+    const t = text.toLowerCase();
+    if (t.includes("включи") || t.includes("зажги")) reply = "Включаю лампу. Ореол стал ярче.";
+    if (t.includes("выключи") || t.includes("потуши")) reply = "Выключаю лампу. Ореол погас.";
+    if (t.includes("цвет") && (t.includes("зел") || t.includes("green"))) reply = "Меняю цвет ореола на зелёный.";
+    if (t.includes("цвет") && (t.includes("жёл") || t.includes("желт") || t.includes("yellow"))) reply = "Меняю цвет ореола на жёлтый.";
 
-    if (!apiKey) {
-      // Без ключа всё равно отвечаем, чтобы мост тестировался
-      return res.status(200).json({
-        ok: true,
-        reply: "Мост активен. Добавь OPENAI_API_KEY в переменные окружения Vercel.",
-        lamp_action
-      });
-    }
-
-    const openaiResp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.4,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Ты — голосовой ассистент для владельцев лампы LED-MC. Отвечай кратко и по делу. " +
-              "Если пользователь просит изменить свет, можешь дополнить ответ советом, " +
-              "но решение по свету уже вычисляет сервер и отдаёт в поле lamp_action.",
-          },
-          { role: "user", content: text },
-        ],
-      }),
+    return res.status(200).json({
+      ok: true,
+      deviceId: body.deviceId || "unknown",
+      reply
     });
 
-    if (!openaiResp.ok) {
-      const err = await safeJson(openaiResp);
-      res.status(502).json({ ok: false, error: "OpenAI error", detail: err });
-      return;
-    }
-
-    const data = await openaiResp.json();
-    const reply =
-      data?.choices?.[0]?.message?.content?.trim() ||
-      "Я на связи. Скажи, что нужно.";
-
-    res.status(200).json({ ok: true, reply, lamp_action });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: "Server error", detail: String(e) });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Server error", detail: String(err) });
   }
-}
-
-// --------- Утилиты ---------
-
-function safeJson(resp) {
-  return resp
-    .json()
-    .catch(async () => ({ status: resp.status, text: await resp.text() }));
-}
-
-/** Грубое распознавание фраз для управления диском */
-function detectLampAction(text) {
-  const t = text.toLowerCase();
-
-  // вкл/выкл
-  if (/\b(выключи|off|потуши)\b/.test(t)) {
-    return { action: "power", params: { on: false } };
-  }
-  if (/\b(включи|on|зажги)\b/.test(t)) {
-    return { action: "power", params: { on: true } };
-  }
-
-  // яркость: проценты
-  const pct = t.match(/(\d{1,3})\s*%/);
-  if (pct) {
-    let v = Math.max(0, Math.min(100, parseInt(pct[1], 10)));
-    return { action: "brightness", params: { value: v } };
-  }
-
-  // режим «дыхание»
-  if (/(дыхани|пульс|breath|pulse)/.test(t)) {
-    return { action: "mode", params: { name: "breathe", speed: 1.0 } };
-  }
-
-  // цвет по ключевым словам
-  const hueMap = {
-    красн: 0,
-    оранж: 30,
-    янтар: 45,
-    желт: 55,
-    лайм: 75,
-    зелён: 120,
-    зелен: 120,
-    бирюз: 165,
-    голуб: 200,
-    синий: 220,
-    фиолет: 275,
-    пурпур: 300,
-    розов: 330,
-    white: 0, // пусть фронт интерпретирует как нейтральный
-    бел: 0,
-    warm: 40,
-    cold: 210
-  };
-  for (const key of Object.keys(hueMap)) {
-    if (t.includes(key)) {
-      return { action: "color", params: { hue: hueMap[key] } };
-    }
-  }
-
-  return null; // нет команды — просто диалог
 }
