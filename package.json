@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "node-fetch": "^3.3.2",
-    "cors": "^2.8.5"
+    "node-fetch": "^3.3.2"
   },
   "scripts": {
-    "start": "node api/chat.js"
+    "dev": "vercel dev",            // запуск локально с эмуляцией Vercel
+    "start": "node server.js"       // опционально: локальный сервер для тестов
   }
 }
