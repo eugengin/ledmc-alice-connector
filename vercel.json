@@ -1,12 +1,12 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/chat.js", "use": "@vercel/node" }
+    { "src": "api/lamp.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "^/$",        "dest": "/lamp.html" },
-    { "src": "^/lamp$",    "dest": "/lamp.html" },
-    { "src": "^/lamp.html$", "dest": "/lamp.html" },
-    { "src": "^/api/chat$",  "dest": "/api/chat.js" }
+    { "src": "^/$",           "dest": "/lamp.html" },
+    { "src": "^/lamp$",       "dest": "/lamp.html" },
+    { "src": "^/lamp.html$",  "dest": "/lamp.html" },
+    { "src": "^/api/lamp$",   "dest": "/api/lamp.js" }
   ]
 }
