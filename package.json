@@ -7,7 +7,7 @@
     "node-fetch": "^3.3.2"
   },
   "scripts": {
-    "dev": "vercel dev",            // запуск локально с эмуляцией Vercel
-    "start": "node server.js"       // опционально: локальный сервер для тестов
+    "dev": "vercel dev",
+    "start": "node server.js"
   }
 }
